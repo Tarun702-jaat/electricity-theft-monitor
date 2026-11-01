@@ -153,6 +153,12 @@ def _init_consumer_db():
                 FOREIGN KEY(user_id) REFERENCES consumer_users(id) ON DELETE CASCADE
             )
         """)
+        # Safe schema upgrades for existing prototype databases.
+        bill_columns = {row["name"] for row in conn.execute("PRAGMA table_info(consumer_bills)").fetchall()}
+        if "payment_status" not in bill_columns:
+            conn.execute("ALTER TABLE consumer_bills ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'Unmarked'")
+        if "payment_date" not in bill_columns:
+            conn.execute("ALTER TABLE consumer_bills ADD COLUMN payment_date TEXT NOT NULL DEFAULT ''")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_consumer_bills_user ON consumer_bills(user_id, bill_month)")
 
 
@@ -307,6 +313,8 @@ def _render_consumer_portal():
         with b3:
             due_date = st.date_input("Payment due date", value=date.today(), key="consumer_bill_due")
         notes = st.text_area("Notes (optional)", max_chars=500, placeholder="Example: monthly bill, estimated reading, payment note…")
+        payment_status = st.selectbox("Payment status", ["Unmarked", "Paid", "Unpaid", "Disputed"])
+        payment_date = st.date_input("Payment date (if paid)", value=date.today(), key="consumer_payment_date")
         bill_file = st.file_uploader("Attach bill copy (optional, PDF/JPG/PNG, max 5 MB)", type=["pdf", "jpg", "jpeg", "png"], key="consumer_bill_upload")
         save_bill = st.form_submit_button("Save bill to my dashboard")
     if save_bill:
@@ -317,11 +325,12 @@ def _render_consumer_portal():
             filename = bill_file.name[:180] if bill_file is not None else ""
             with _consumer_db() as conn:
                 conn.execute("""
-                    INSERT INTO consumer_bills(user_id, bill_month, units_kwh, amount, due_date, notes, file_name, file_bytes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO consumer_bills(user_id, bill_month, units_kwh, amount, due_date, notes, file_name, file_bytes, payment_status, payment_date)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     user_id, bill_month.isoformat(), float(units), float(amount),
                     due_date.isoformat(), notes.strip(), filename, payload,
+                    payment_status, payment_date.isoformat() if payment_status == "Paid" else "",
                 ))
             st.success("Bill record saved to your account.")
 
@@ -329,7 +338,7 @@ def _render_consumer_portal():
     st.subheader("3. My electricity history")
     with _consumer_db() as conn:
         bill_rows = conn.execute("""
-            SELECT id, bill_month, units_kwh, amount, due_date, notes, file_name
+            SELECT id, bill_month, units_kwh, amount, due_date, notes, file_name, payment_status, payment_date
             FROM consumer_bills WHERE user_id = ? ORDER BY bill_month DESC, id DESC
         """, (user_id,)).fetchall()
     if not bill_rows:
@@ -339,10 +348,21 @@ def _render_consumer_portal():
     bills_df = pd.DataFrame([dict(row) for row in bill_rows])
     total_units = float(bills_df["units_kwh"].sum())
     total_amount = float(bills_df["amount"].sum())
-    m1, m2, m3 = st.columns(3)
+    m1, m2, m3, m4 = st.columns(4)
     m1.metric("Saved bills", len(bills_df))
     m2.metric("Total recorded units", f"{total_units:,.1f} kWh")
     m3.metric("Total recorded bill amount", f"₹{total_amount:,.2f}")
+    unpaid = bills_df[bills_df["payment_status"].isin(["Unpaid", "Unmarked"])]
+    m4.metric("Unpaid / unmarked bills", len(unpaid))
+    if not unpaid.empty:
+        st.warning(f"You have {len(unpaid)} bill record(s) marked unpaid or unmarked. Verify the current balance on the official UHBVN portal before paying.")
+    paid_total = float(bills_df.loc[bills_df["payment_status"] == "Paid", "amount"].sum())
+    avg_units = float(bills_df["units_kwh"].mean()) if len(bills_df) else 0.0
+    avg_amount = float(bills_df["amount"].mean()) if len(bills_df) else 0.0
+    k1, k2, k3 = st.columns(3)
+    k1.metric("Recorded paid amount", f"₹{paid_total:,.2f}")
+    k2.metric("Average units per bill", f"{avg_units:,.1f} kWh")
+    k3.metric("Average bill amount", f"₹{avg_amount:,.2f}")
     chart_df = bills_df.copy()
     chart_df["bill_month"] = pd.to_datetime(chart_df["bill_month"], errors="coerce")
     chart_df = chart_df.dropna(subset=["bill_month"]).sort_values("bill_month")
@@ -356,9 +376,30 @@ def _render_consumer_portal():
             use_container_width=True,
         )
     st.dataframe(
-        bills_df[["bill_month", "units_kwh", "amount", "due_date", "notes", "file_name"]],
+        bills_df[["bill_month", "units_kwh", "amount", "due_date", "payment_status", "payment_date", "notes", "file_name"]],
         hide_index=True, use_container_width=True,
     )
+    st.download_button(
+        "Download my bill history (CSV)",
+        bills_df.drop(columns=["id"], errors="ignore").to_csv(index=False).encode("utf-8"),
+        "my_electricity_bill_history.csv",
+        "text/csv",
+        use_container_width=True,
+    )
+    st.subheader("Bill affordability and usage insights")
+    if avg_units > 0:
+        st.write(f"Your recorded average usage is **{avg_units:,.1f} kWh per bill**. Your recorded average bill is **₹{avg_amount:,.2f}**.")
+        if len(bills_df) >= 2:
+            latest = bills_df.iloc[0]
+            previous = bills_df.iloc[1]
+            change = float(latest["units_kwh"]) - float(previous["units_kwh"])
+            if change > 0:
+                st.info(f"Your latest saved bill has {change:,.1f} more units than the previous saved bill.")
+            elif change < 0:
+                st.success(f"Your latest saved bill has {abs(change):,.1f} fewer units than the previous saved bill.")
+            else:
+                st.info("Your latest and previous saved bills show the same recorded usage.")
+        st.caption("Insights are calculated only from bills you entered. They are not utility meter telemetry or a tariff-based forecast.")
 
     attached = bills_df[bills_df["file_name"].astype(str).ne("")]
     if not attached.empty:
