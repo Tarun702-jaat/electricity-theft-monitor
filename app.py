@@ -401,6 +401,39 @@ def _render_consumer_portal():
                 st.info("Your latest and previous saved bills show the same recorded usage.")
         st.caption("Insights are calculated only from bills you entered. They are not utility meter telemetry or a tariff-based forecast.")
 
+    st.subheader("Your next-bill planning estimate")
+    if len(bills_df) >= 2 and avg_units > 0:
+        recent = bills_df.head(min(3, len(bills_df)))
+        forecast_units = float(recent["units_kwh"].mean())
+        recent_unit_costs = [
+            float(row["amount"]) / float(row["units_kwh"])
+            for _, row in recent.iterrows()
+            if float(row["units_kwh"]) > 0
+        ]
+        indicative_rate = sum(recent_unit_costs) / len(recent_unit_costs) if recent_unit_costs else 0.0
+        forecast_amount = forecast_units * indicative_rate
+        f1, f2 = st.columns(2)
+        f1.metric("Planning usage estimate", f"{forecast_units:,.1f} kWh")
+        f2.metric("Indicative bill estimate", f"₹{forecast_amount:,.0f}" if indicative_rate else "Not available")
+        st.caption("Simple estimate from your latest saved bills: recent average units × your historical average bill-per-unit. Actual bills can differ due to tariff slabs, fixed charges, taxes, adjustments, season, meter multiplier and billing days. This is not an official UHBVN forecast.")
+    else:
+        st.info("Save at least two monthly bills to unlock a basic next-bill planning estimate.")
+
+    st.subheader("Personalised ways to reduce electricity use")
+    if len(bills_df) >= 2:
+        latest_units = float(bills_df.iloc[0]["units_kwh"])
+        previous_units = float(bills_df.iloc[1]["units_kwh"])
+        if previous_units > 0 and latest_units > previous_units * 1.10:
+            st.warning("Your latest recorded usage is more than 10% above the previous bill. Check whether billing days, weather, guests or appliance use changed before assuming there is a fault.")
+            st.write("- Compare the billing-period dates and meter readings first.\n- Check high-use appliances such as air conditioners, water heaters, pumps and room heaters.\n- Use AC at a moderate comfortable setting, clean filters as recommended and keep doors/windows closed while cooling.\n- Switch off lights and devices when not needed; avoid leaving chargers and electronics on unnecessarily.")
+        elif latest_units < previous_units:
+            st.success("Your latest saved bill shows lower usage than the previous one. Continue checking monthly readings and billing days.")
+        else:
+            st.info("Your recent recorded usage is broadly similar. Small changes in billing days or weather can affect comparisons.")
+    else:
+        st.write("- Prefer LED lights and switch off lights/fans in empty rooms.\n- Use efficient appliances and their energy-saving modes where suitable.\n- Set AC to a comfortable moderate temperature and clean filters regularly.\n- Run washing machines with suitable full loads and avoid unnecessary hot-water use.\n- Check pump, geyser and room-heater timers; avoid leaving them on longer than needed.")
+    st.caption("Tips are general energy-efficiency guidance, not guaranteed savings. Never touch exposed wiring, open a meter or interfere with utility equipment.")
+
     attached = bills_df[bills_df["file_name"].astype(str).ne("")]
     if not attached.empty:
         st.subheader("My uploaded bill copies")
@@ -648,6 +681,51 @@ elif page == "UHBVN Consumer Help":
     for title, detail in problems:
         with st.expander(title):
             st.write(detail)
+
+    st.subheader("How to pay / fill in the online bill-payment form")
+    st.markdown("""
+    1. Open the official [UHBVN bill payment portal](https://epayment.uhbvn.org.in/b2cpaybill.aspx).
+    2. Read the page instructions and enter the consumer/account identifier exactly as printed on your bill in the field requested by the official portal.
+    3. Check that the consumer name, bill month and payable amount shown by the official portal match your bill.
+    4. Choose an available payment method shown by the portal and follow the bank/payment-provider steps.
+    5. Wait for the success/receipt page. Save the receipt or transaction reference.
+    6. If money is debited but the bill still appears unpaid, do not pay repeatedly immediately; keep the bank reference and contact UHBVN through its official complaint channel.
+    """)
+    st.warning("Never share your OTP, UPI PIN, card PIN, CVV or banking password with anyone or enter them into this prototype. Pay only on the official UHBVN portal.")
+
+    st.subheader("Prepare a complaint")
+    st.write("Choose the issue below to create a draft you can review and submit through UHBVN's official complaint channel. This tool does not submit the complaint for you.")
+    issue_type = st.selectbox(
+        "Complaint category",
+        ["Wrong / high bill", "Bill not received", "Payment not updated", "Meter defective", "No electricity supply", "Meter burnt", "Other"],
+        key="consumer_complaint_type",
+    )
+    complaint_name = st.text_input("Name (optional)", key="consumer_complaint_name")
+    complaint_area = st.text_input("Area / locality (optional)", key="consumer_complaint_area")
+    complaint_ref = st.text_input("Consumer number / account reference (optional; enter only on official form)", key="consumer_complaint_ref")
+    complaint_details = st.text_area("Explain the issue (dates, bill month, readings or transaction reference; do not include OTP/PIN)", key="consumer_complaint_details")
+    complaint_templates = {
+        "Wrong / high bill": "I request verification of my electricity bill. Please check the billing period, previous and current meter readings, meter multiplier, units and applicable charges. Kindly arrange meter inspection if required and issue a corrected bill if an error is confirmed.",
+        "Bill not received": "I have not received my electricity bill for the relevant billing period. Please verify the billing and registered delivery details and help me obtain the bill.",
+        "Payment not updated": "I made a bill payment, but it is not reflected in my account. Please verify the transaction and update the payment status if received. I can provide the payment reference through the official channel.",
+        "Meter defective": "I suspect that my electricity meter may be defective. Please register the complaint and arrange an official meter inspection.",
+        "No electricity supply": "I am experiencing a power supply interruption at my location. Please register the no-supply complaint and provide an update.",
+        "Meter burnt": "My electricity meter appears to be burnt or damaged. Please arrange an authorised inspection and replacement as per applicable procedure. I will not touch or open the meter.",
+        "Other": "I request assistance with the electricity service issue described below. Please register the complaint, investigate and provide an update.",
+    }
+    draft = (
+        f"Subject: {issue_type}\\n\\n"
+        f"Name: {complaint_name or '[Enter name on official form]'}\\n"
+        f"Area: {complaint_area or '[Enter locality on official form]'}\\n"
+        f"Consumer reference: {complaint_ref or '[Enter securely on official portal]'}\\n\\n"
+        f"{complaint_templates[issue_type]}\\n\\n"
+        f"Details: {complaint_details or '[Add dates, bill month, readings or transaction reference]'}\\n\\n"
+        "Please provide a complaint / docket number for future follow-up."
+    )
+    st.text_area("Complaint draft — review and copy", value=draft, height=230)
+    st.download_button("Download complaint draft", draft.encode("utf-8"), "uhbvn_complaint_draft.txt", "text/plain")
+    st.markdown("[Open official UHBVN complaint portal](https://chs.uhbvn.org.in/)")
+    st.caption("Enter full account details only on the official UHBVN portal, not in this prototype. Attach copies of bills or payment receipts only when the official complaint process requests them.")
 
     st.subheader("UHBVN consumer contact")
     c1, c2, c3 = st.columns(3)
