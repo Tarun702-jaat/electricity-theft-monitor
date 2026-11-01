@@ -24,6 +24,8 @@ The current dashboard is a **prototype**, not a live UHBVN account connection:
 - It uses email/password prototype sign-in and stores passwords as salted PBKDF2-HMAC-SHA256 hashes.
 - Consumers can enter their own connection label and bill figures and upload a bill copy.
 - Consumers can mark bill records as paid, unpaid, disputed or unmarked, record a payment date, review totals and usage trends, and export their saved bill history as CSV.
+- The dashboard compares recent saved bills, provides a simple clearly labelled next-bill planning estimate, and gives general electricity-saving suggestions based on recorded usage changes.
+- The Consumer Help page includes a step-by-step bill-payment guide and a complaint-draft assistant that consumers can download and submit themselves through official UHBVN channels.
 - Usage insights are calculated only from consumer-entered records; they are not live meter readings, official balances or tariff forecasts.
 - It does not send OTPs, verify a UHBVN account, retrieve live bills/readings/payments, submit complaints or make payments.
 - It does not automatically OCR uploaded bills.
