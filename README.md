@@ -69,3 +69,14 @@ SMTP_FROM = "POWERGUARD <your-sender@example.com>"
 Use the provider's app password or SMTP credential, not your normal mailbox password. The owner must configure valid SMTP credentials before email OTP can be sent. Existing accounts will also need to verify their email the next time they sign in.
 
 **UHBVN verification is separate:** real consumer/account and registered-mobile verification requires UHBVN's authorised API or official KYC/OTP process. Do not label an email OTP as UHBVN verification.
+
+
+## Branded hosted entry address
+
+A branded GitHub Pages front page has been added at `public/index.html`. It embeds the existing Streamlit application and also provides an "Open app separately" link. This gives the project a separate address, but the interactive Python app still runs on Streamlit.
+
+To publish it, open **GitHub → repository Settings → Pages**, set **Build and deployment → Source** to **GitHub Actions**, and wait for the `Deploy POWERGUARD landing site` workflow to finish successfully. The expected project address is:
+
+`https://tarun702-jaat.github.io/electricity-theft-monitor/`
+
+This is a branded entry page, not a migration of the Streamlit backend. For a fully independent application host, the Streamlit service itself must be deployed to a Python-capable host such as Render or another app platform.
