@@ -4,6 +4,8 @@ import hmac
 import os
 import re
 import secrets
+import smtplib
+from email.message import EmailMessage
 import sqlite3
 import time
 from contextlib import contextmanager
@@ -187,7 +189,7 @@ def _init_consumer_db():
             )
         """)
         # Safe schema upgrades for existing prototype databases.
-        bill_columns = {row["name"] for row in conn.execute("PRAGMA table_info(consumer_bills)").fetchall()}
+        user_columns = {row["name"] for row in conn.execute("PRAGMA table_info(consumer_users)").fetchall()}\n        if "email_verified" not in user_columns:\n            conn.execute("ALTER TABLE consumer_users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0")\n        bill_columns = {row["name"] for row in conn.execute("PRAGMA table_info(consumer_bills)").fetchall()}
         if "payment_status" not in bill_columns:
             conn.execute("ALTER TABLE consumer_bills ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'Unmarked'")
         if "payment_date" not in bill_columns:
@@ -232,6 +234,97 @@ def _authenticate_consumer(email, password):
     if not hmac.compare_digest(candidate, row["password_hash"]):
         return None
     return (row["id"], row["email"])
+
+
+def _mail_setting(name, default=""):
+    value = os.environ.get(name)
+    if value:
+        return value
+    try:
+        return str(st.secrets.get(name, default))
+    except Exception:
+        return default
+
+
+def _send_consumer_email_otp(email, code):
+    """Send an email ownership code. Configure SMTP_* secrets in Streamlit."""
+    host = _mail_setting("SMTP_HOST")
+    port = int(_mail_setting("SMTP_PORT", "587"))
+    username = _mail_setting("SMTP_USERNAME")
+    password = _mail_setting("SMTP_PASSWORD")
+    sender = _mail_setting("SMTP_FROM", username)
+    if not all([host, username, password, sender]):
+        return False, "Email verification is not configured yet. The site owner must add SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD and SMTP_FROM in Streamlit Secrets."
+    message = EmailMessage()
+    message["Subject"] = "Your POWERGUARD verification code"
+    message["From"] = sender
+    message["To"] = email
+    message.set_content(
+        f"Your POWERGUARD email verification code is {code}. "
+        "It expires in 5 minutes. Do not share this code with anyone. "
+        "This verifies your email address only; it does not verify a UHBVN electricity connection."
+    )
+    try:
+        with smtplib.SMTP(host, port, timeout=15) as server:
+            server.starttls()
+            server.login(username, password)
+            server.send_message(message)
+        return True, "Verification code sent to your email."
+    except Exception:
+        return False, "Could not send the email. Check the SMTP settings in Streamlit Secrets."
+
+
+def _email_is_verified(user_id):
+    with _consumer_db() as conn:
+        row = conn.execute(
+            "SELECT email_verified FROM consumer_users WHERE id = ?", (user_id,)
+        ).fetchone()
+    return bool(row and row["email_verified"])
+
+
+def _render_email_verification(user_id, email):
+    st.subheader("Verify your email address")
+    st.info("A one-time code will be sent to your email. This confirms email access only, not UHBVN account ownership.")
+    if st.button("Send email verification code", key="send_consumer_email_otp"):
+        now = time.time()
+        last_sent = float(st.session_state.get("consumer_email_otp_sent_at", 0))
+        if now - last_sent < 60:
+            st.warning("Please wait 60 seconds before requesting another code.")
+        else:
+            code = f"{secrets.randbelow(1000000):06d}"
+            ok, message = _send_consumer_email_otp(email, code)
+            if ok:
+                st.session_state.consumer_email_otp_hash = hashlib.sha256((email + ":" + code).encode()).hexdigest()
+                st.session_state.consumer_email_otp_expiry = now + 300
+                st.session_state.consumer_email_otp_attempts = 0
+                st.session_state.consumer_email_otp_sent_at = now
+                st.success(message)
+            else:
+                st.error(message)
+    if st.session_state.get("consumer_email_otp_hash"):
+        with st.form("consumer_email_verify_form"):
+            entered = st.text_input("Enter the 6-digit code sent to your email", max_chars=6)
+            submitted = st.form_submit_button("Verify email", use_container_width=True)
+        if submitted:
+            attempts = int(st.session_state.get("consumer_email_otp_attempts", 0))
+            expected = st.session_state.consumer_email_otp_hash
+            candidate = hashlib.sha256((email + ":" + entered.strip()).encode()).hexdigest()
+            if time.time() > float(st.session_state.get("consumer_email_otp_expiry", 0)):
+                st.session_state.pop("consumer_email_otp_hash", None)
+                st.error("Code expired. Request a new code.")
+            elif attempts >= 5:
+                st.session_state.pop("consumer_email_otp_hash", None)
+                st.error("Too many attempts. Request a new code later.")
+            elif re.fullmatch(r"\\d{6}", entered.strip()) and hmac.compare_digest(candidate, expected):
+                with _consumer_db() as conn:
+                    conn.execute("UPDATE consumer_users SET email_verified = 1 WHERE id = ?", (user_id,))
+                st.session_state.pop("consumer_email_otp_hash", None)
+                st.success("Email verified successfully.")
+                st.rerun()
+            else:
+                st.session_state.consumer_email_otp_attempts = attempts + 1
+                st.error("Incorrect code.")
+    st.caption("If this account is for a UHBVN connection, complete consumer KYC separately on the official UHBVN portal.")
 
 
 def _render_consumer_portal():
@@ -280,10 +373,18 @@ def _render_consumer_portal():
                     else:
                         st.error(result)
         st.info("Each signed-in account can access only records linked to its own account in this app.")
-        st.caption("This prototype does not provide email verification or password reset. Do not reuse a password from another service.")
+        st.caption("Email verification is required after sign-in. The site owner must configure SMTP settings in Streamlit Secrets. Do not reuse a password from another service.")
         return
 
     user_id = int(st.session_state.consumer_user_id)
+    if not _email_is_verified(user_id):
+        _render_email_verification(user_id, st.session_state.consumer_email)
+        if st.button("Sign out", key="unverified_consumer_sign_out"):
+            st.session_state.consumer_user_id = None
+            st.session_state.consumer_email = None
+            st.rerun()
+        st.stop()
+
     st.write(f"Signed in as **{st.session_state.consumer_email}**")
     if st.button("Sign out", key="consumer_sign_out"):
         st.session_state.consumer_user_id = None
@@ -718,7 +819,7 @@ elif page == "UHBVN Consumer Help":
                 with st.container(border=True):
                     st.markdown("**" + item[0] + "**")
                     st.write(item[2])
-                    st.markdown("[Open official UHBVN service](" + item[1] + ")")
+                    st.markdown("<a href=\"" + item[1] + "\" target=\"_blank\" rel=\"noopener noreferrer\">Open official UHBVN service ↗</a>", unsafe_allow_html=True)
 
     st.divider()
     st.subheader(_t("How to understand your electricity bill"))
