@@ -91,6 +91,7 @@ with st.sidebar:
         "Navigation",
         [
             "Overview",
+            "UHBVN Consumer Help",
             "India Monitoring",
             "Theft Detection",
             "Data Centre",
@@ -214,6 +215,103 @@ if page == "Overview":
     st.caption("This section is designed for connected utility feeds, public datasets and validated meter imports. Current display uses simulated data when live sources are unavailable.")
     live = app_summary["live_feed"]
     st.dataframe(live, hide_index=True, use_container_width=True)
+
+elif page == "UHBVN Consumer Help":
+    st.title("UHBVN Consumer Information Centre")
+    st.caption("A plain-language guide to electricity bills, meter readings, payments and consumer services in Uttar Haryana.")
+    st.info("PowerGuard is not connected to UHBVN's private billing system. It cannot retrieve personal bills, balances, payments or live readings. Use official UHBVN portals for account-specific services. Never enter OTPs, Aadhaar numbers or passwords here.")
+
+    st.subheader("Official consumer services")
+    links = [
+        ("Pay / view bill", "https://epayment.uhbvn.org.in/b2cpaybill.aspx", "View the bill amount and pay through UHBVN."),
+        ("Trust Reading", "https://trustbill.uhbvn.org.in/", "Submit a self-reading if the billed reading appears incorrect and your account is eligible."),
+        ("Submit meter reading", "https://trustbill.uhbvn.org.in/trustbased.aspx", "Official form for KWH/KVAH reading, OTP and meter photograph."),
+        ("Track Trust Reading", "https://trustbill.uhbvn.org.in/CheckStatus.aspx", "Track by account number or case ID."),
+        ("Payment history / receipt", "https://epayment.uhbvn.org.in/b2cViewReceiptList.aspx", "Look up payment records and receipts."),
+        ("Complaints", "https://chs.uhbvn.org.in/", "Register and follow up on consumer complaints."),
+    ]
+    for i in range(0, len(links), 2):
+        cols = st.columns(2)
+        for col, item in zip(cols, links[i:i + 2]):
+            with col:
+                with st.container(border=True):
+                    st.markdown("**" + item[0] + "**")
+                    st.write(item[2])
+                    st.markdown("[Open official UHBVN service](" + item[1] + ")")
+
+    st.divider()
+    st.subheader("How to understand your electricity bill")
+    terms = [
+        ("Account / K. No.", "Your UHBVN consumer account identifier. Keep it private and use it only on official services."),
+        ("Billing period", "The dates covered by this bill. Compare readings only for the same billing period."),
+        ("Previous reading", "The meter reading recorded at the end of the previous billing cycle."),
+        ("Current reading", "The reading recorded for the present billing cycle."),
+        ("Units consumed (kWh)", "Usually current reading minus previous reading, multiplied by the meter multiplier. Special meter registers or corrections can change this calculation."),
+        ("kVAh and maximum demand", "Some categories use kVAh energy or demand-related billing. Follow the unit and multiplier printed on your bill."),
+        ("Fixed charges", "A tariff charge linked to category and sanctioned load/connection terms."),
+        ("Energy charges", "Charges for units consumed under the applicable tariff slabs/rates."),
+        ("Fuel / power purchase adjustment", "An approved adjustment may appear under labels such as FSA or other tariff components."),
+        ("Electricity duty / taxes", "Applicable government levies shown as separate bill components."),
+        ("Arrears / previous balance", "Amounts carried forward. Check official payment receipts if a previous payment is missing."),
+        ("Rebate / subsidy / adjustment", "A credit applied only when the consumer meets the relevant scheme conditions."),
+        ("Due date / late payment surcharge", "Pay by the due date printed on the bill. Applicable surcharge depends on current rules."),
+    ]
+    for title, detail in terms:
+        with st.expander(title):
+            st.write(detail)
+
+    st.subheader("Check your meter units")
+    st.write("For a basic cumulative kWh register:")
+    st.latex(r"\text{Units consumed} = (\text{Current reading} - \text{Previous reading}) \times \text{Meter multiplier}")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        prev = st.number_input("Previous reading (kWh)", min_value=0.0, value=0.0, key="uhbvn_prev")
+    with c2:
+        curr = st.number_input("Current reading (kWh)", min_value=0.0, value=0.0, key="uhbvn_curr")
+    with c3:
+        mult = st.number_input("Meter multiplier", min_value=0.0001, value=1.0, key="uhbvn_multiplier")
+    if curr >= prev:
+        st.metric("Indicative units consumed", f"{(curr - prev) * mult:,.2f} kWh")
+    else:
+        st.warning("Current reading is lower than previous. Check the register, dates, rollover or correction with UHBVN.")
+    st.caption("This is an educational unit calculator, not an official bill calculator. It does not determine the payable amount.")
+
+    st.subheader("Trust Reading: what consumers should know")
+    st.write("UHBVN's Trust Reading portal describes eligibility for domestic, non-domestic and LT industrial consumers with load up to 20 kW and 10-digit account numbers. It requires OTP verification and a clear meter photograph. Confirm current eligibility and instructions on the official portal before submitting.")
+    st.markdown("[Read UHBVN Trust Reading instructions] (https://trustbill.uhbvn.org.in/)")
+    st.markdown("1. Match the meter number and consumer details on your bill.\\n2. Note the correct kWh or kVAh register.\\n3. Record the digits requested by the official form.\\n4. Take a clear current photograph of the meter display.\\n5. Submit only through UHBVN's official portal and keep the case ID/SMS.")
+
+    st.subheader("Common problems and what to do")
+    problems = [
+        ("Wrong or unusually high bill", "Compare dates, readings, units and multiplier; check payment receipts; then raise a billing complaint."),
+        ("Bill not received", "Check the official bill portal and register a bill-not-received complaint if needed."),
+        ("Defective / stuck / fast / slow meter", "Request an official meter inspection. Do not open or interfere with the meter."),
+        ("Burnt meter or no supply", "Report promptly using the official complaint channels."),
+        ("Payment not reflected", "Keep the bank/UPI receipt or reference ID and contact UHBVN through its official portal."),
+    ]
+    for title, detail in problems:
+        with st.expander(title):
+            st.write(detail)
+
+    st.subheader("UHBVN consumer contact")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Helpline", "1912")
+    c2.metric("Toll-free", "1800 180 1550")
+    c3.metric("No-supply missed call", "9990231912")
+    st.markdown("- WhatsApp chatbot: **9815961912**\\n- Email: **1912@uhbvn.org.in**\\n- SMS complaint number: **9152331912**")
+    st.caption("Published complaint codes include NS (No Supply), MD (Meter Defective), MB (Meter Burnt), WB (Wrong Bill) and BNR (Bill Not Received). Check the current format on UHBVN's complaint portal.")
+    st.markdown("[Open UHBVN complaint portal](https://chs.uhbvn.org.in/)")
+
+    st.subheader("Consumer rights and escalation")
+    st.write("If a complaint is not resolved through the normal channel, consumers may approach the Consumer Grievances Redressal Forum (CGRF) and, where applicable, the Electricity Ombudsman. Service timelines depend on the complaint type and current regulations.")
+    st.markdown("[UHBVN Right to Service timelines (PDF)](https://www.uhbvn.org.in/staticContent/documents/RTS/Services_Right_To_Act.pdf)")
+    st.markdown("[HERC CGRF information](https://www.herc.org.in/OmbudsmanContent/266_1_CGRF.aspx)")
+    st.markdown("[UHBVN complaint-handling procedure (PDF)](https://www.uhbvn.org.in/staticContent/documents/Complaint%20Handling%20procedure.pdf)")
+
+    st.subheader("Tariff and public information")
+    st.markdown("- [UHBVN official website](https://www.uhbvn.org.in/)\\n- [HERC website](https://herc.gov.in/)\\n- [HERC regulations and tariff orders](https://herc.org.in/Regulation/1.aspx)")
+    st.info("Tariff slabs, fixed charges, rebates and surcharges change by consumer category and effective date. This page does not hard-code a universal per-unit rate. Check the latest applicable UHBVN/HERC tariff order and the category printed on your bill.")
+    st.caption("Sources checked 2 November 2026: UHBVN bill-payment portal, Trust Reading portal, payment-history page, complaint portal, Right to Service document and HERC consumer-grievance information. Informational guide; not an official UHBVN service.")
 
 elif page == "India Monitoring":
     st.title("India Electricity Monitoring")
