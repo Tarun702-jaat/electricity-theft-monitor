@@ -309,7 +309,7 @@ def _render_consumer_portal():
             mobile_last4 = st.text_input("Last 4 digits of registered mobile", max_chars=4)
             start_demo = st.form_submit_button("Start demo verification")
         if start_demo:
-            if not (re.fullmatch(r"\\d{4}", account_last4.strip()) and re.fullmatch(r"\\d{4}", mobile_last4.strip())):
+            if not (re.fullmatch(r"\d{4}", account_last4.strip()) and re.fullmatch(r"\d{4}", mobile_last4.strip())):
                 st.error("Enter exactly four digits in both fields.")
             else:
                 st.session_state.consumer_demo_account_last4 = account_last4.strip()
