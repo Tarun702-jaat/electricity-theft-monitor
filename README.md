@@ -1,19 +1,50 @@
-# electricity-theft-monitor
-Smart electricity theft detection dashboard built with Streamlit for monitoring suspicious meter readings and generating reports.
+# POWERGUARD GLOBAL — Electricity Theft Monitor & UHBVN Consumer Portal
 
-## Personal Consumer Dashboard (prototype)
+A Streamlit application combining an electricity-theft monitoring prototype with a consumer-facing UHBVN information centre.
 
-The **My Consumer Dashboard** page adds account-based sign-in, a consumer connection profile, manually entered bill records, optional PDF/JPG/PNG bill attachments (5 MB maximum), and personal consumption/bill-history charts.
+## Website sections
 
-### Prototype storage and privacy
+- **Overview:** high-level monitoring dashboard (demo/public-reference data unless connected to verified sources).
+- **UHBVN Consumer Help:** plain-language guide to bills, meter readings, unit calculation, consumer complaints, contacts and official service links.
+- **My Consumer Dashboard:** private prototype account, consumer-entered connection profile, manual bill history, optional bill attachments and consumption charts.
+- **India Monitoring:** regional utility monitoring view.
+- **Theft Detection:** rule/ML anomaly review. Flags are candidates for human review, not proof of theft.
+- **Data Centre, News Intelligence and Reports:** existing monitoring and reporting functions.
 
-- Passwords are stored as salted PBKDF2-HMAC-SHA256 hashes; plaintext passwords are not stored.
-- Consumer profile and bill queries are scoped to the signed-in account.
-- The prototype stores records and uploaded attachments in a local SQLite file at `powerguard_data/consumer_portal.sqlite3` by default.
-- Set the `POWERGUARD_DATA_DIR` environment variable to a persistent, access-controlled directory before deployment if the hosting platform supports one.
-- **Streamlit Community Cloud local files are not guaranteed to persist across restarts/redeployments.** This SQLite implementation is a demonstration, not a production-grade store for real consumer bills. Do not invite the public to upload sensitive bills until a managed persistent database, private file storage, backups, transport security, access controls, and a privacy review are in place.
-- Ask users not to enter full utility account numbers, Aadhaar numbers, OTPs, passwords, or other unnecessary personal information. Redact personal details and QR/barcodes from bill attachments.
-- The portal does not connect to UHBVN/DHBVN private systems, perform payments, or retrieve live meter readings. Users enter their own bill figures. Attachments are stored for download and are **not automatically OCR-scanned**.
-- Email verification and password reset are not implemented in this prototype.
+## Run locally
 
-For a production release, migrate authentication to a managed identity provider and store per-user records in a persistent database with row-level security; use private object storage for bill files. Only integrate live utility data through an authorized UHBVN/DHBVN API.
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+## Consumer dashboard — current status
+
+The current dashboard is a **prototype**, not a live UHBVN account connection:
+- It uses email/password prototype sign-in and stores passwords as salted PBKDF2-HMAC-SHA256 hashes.
+- Consumers can enter their own connection label and bill figures and upload a bill copy.
+- It does not send OTPs, verify a UHBVN account, retrieve live bills/readings/payments, submit complaints or make payments.
+- It does not automatically OCR uploaded bills.
+- It must not be presented as an official UHBVN service or as displaying verified live account data.
+
+The UHBVN Consumer Help page provides public guidance and links to official services. Account-specific transactions should be completed through UHBVN's official portals until an approved API integration is implemented.
+
+## UHBVN live API integration
+
+The user-facing live API connector cannot be safely completed from a statement that API access exists alone. The official API documentation is needed for the real base URL, authentication scheme, OTP flow, endpoint paths, response schemas, sandbox and permission scope. **Do not guess endpoint URLs or fabricate consumer data.**
+
+See [UHBVN_API_INTEGRATION.md](UHBVN_API_INTEGRATION.md) for the integration checklist, data fields, secure OTP flow, deployment requirements and configuration placeholders.
+
+Never commit API credentials, OTPs, private keys or real consumer records to this repository.
+
+## Storage and production readiness
+
+- The prototype stores data in local SQLite at `powerguard_data/consumer_portal.sqlite3` by default.
+- Local filesystem persistence is not guaranteed on Streamlit Community Cloud.
+- Do not collect real consumer bills or personal data from the public until the app uses a managed persistent database with per-user/connection authorization, private file storage, backups, secure sessions, access logging and a privacy/security review.
+- Set `POWERGUARD_DATA_DIR` only to a persistent, access-controlled directory if using the prototype locally.
+- Use a managed identity provider and row-level access controls for a production release.
+
+## Official UHBVN services
+
+The website's UHBVN Consumer Help page links to official UHBVN bill payment, Trust Reading, payment receipt and complaint services. Verify service availability and current terms on UHBVN's official website.
