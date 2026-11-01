@@ -5,6 +5,7 @@ import os
 import re
 import secrets
 import sqlite3
+import time
 from contextlib import contextmanager
 from pathlib import Path
 from datetime import date
@@ -294,6 +295,58 @@ def _render_consumer_portal():
             "SELECT * FROM consumer_profiles WHERE user_id = ?", (user_id,)
         ).fetchone()
     profile = dict(profile) if profile else {}
+
+    # Demo-only verification workflow. No SMS is sent and no UHBVN records are queried.
+    st.subheader("Consumer connection check")
+    st.warning(
+        "Demo verification only: this test does not contact UHBVN, send an SMS, or confirm that "
+        "the consumer number belongs to you. Do not enter a full account number or phone number."
+    )
+    with st.expander("Try the consumer verification demo", expanded=not st.session_state.get("consumer_demo_check_passed", False)):
+        st.markdown("Enter only the last four digits of your consumer number and registered mobile number.")
+        with st.form("consumer_demo_start_form"):
+            account_last4 = st.text_input("Last 4 digits of consumer number", max_chars=4)
+            mobile_last4 = st.text_input("Last 4 digits of registered mobile", max_chars=4)
+            start_demo = st.form_submit_button("Start demo verification")
+        if start_demo:
+            if not (re.fullmatch(r"\\d{4}", account_last4.strip()) and re.fullmatch(r"\\d{4}", mobile_last4.strip())):
+                st.error("Enter exactly four digits in both fields.")
+            else:
+                st.session_state.consumer_demo_account_last4 = account_last4.strip()
+                st.session_state.consumer_demo_mobile_last4 = mobile_last4.strip()
+                st.session_state.consumer_demo_otp = f"{secrets.randbelow(1000000):06d}"
+                st.session_state.consumer_demo_otp_expiry = time.time() + 180
+                st.session_state.consumer_demo_attempts = 0
+                st.session_state.consumer_demo_check_passed = False
+                st.info("A demo code has been generated below. It is displayed here because this prototype cannot send SMS.")
+        if st.session_state.get("consumer_demo_otp"):
+            if time.time() > st.session_state.get("consumer_demo_otp_expiry", 0):
+                st.error("Demo code expired. Start the demo again.")
+                st.session_state.pop("consumer_demo_otp", None)
+            elif not st.session_state.get("consumer_demo_check_passed", False):
+                st.code(st.session_state.consumer_demo_otp, language=None)
+                with st.form("consumer_demo_otp_form"):
+                    entered_demo_otp = st.text_input("Enter the 6-digit demo code", max_chars=6)
+                    verify_demo = st.form_submit_button("Verify demo code")
+                if verify_demo:
+                    attempts = int(st.session_state.get("consumer_demo_attempts", 0))
+                    if attempts >= 5:
+                        st.error("Maximum attempts reached. Start the demo again.")
+                        st.session_state.pop("consumer_demo_otp", None)
+                    elif hmac.compare_digest(entered_demo_otp.strip(), st.session_state.consumer_demo_otp):
+                        st.session_state.consumer_demo_check_passed = True
+                        st.session_state.pop("consumer_demo_otp", None)
+                        st.success("Demo contact-check completed for this session. This is not official UHBVN verification.")
+                    else:
+                        st.session_state.consumer_demo_attempts = attempts + 1
+                        st.error("Incorrect demo code. Please try again.")
+        if st.session_state.get("consumer_demo_check_passed", False):
+            st.success(
+                "Demo status: contact-check workflow completed. "
+                f"Consumer reference ending {st.session_state.get('consumer_demo_account_last4', '----')}."
+            )
+        st.markdown("[Complete actual consumer KYC on the official UHBVN portal](https://epayment.uhbvn.org.in/updateKYC.aspx)")
+        st.caption("For real verification, UHBVN must confirm the account and registered mobile through its authorised service. This demo status is temporary and is not stored as an official verified identity.")
 
     st.subheader("1. My electricity connection")
     with st.form("consumer_profile_form"):
