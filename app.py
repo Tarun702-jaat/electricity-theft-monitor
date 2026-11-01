@@ -25,6 +25,38 @@ NAVY = "#0b132b"
 SLATE = "#1f2937"
 SEV_COLOR = {"High": RED, "Medium": ORANGE, "Low": "#eab308", "Normal": GREEN}
 
+# Built-in English/Hindi interface language support.
+UI_TEXT = {
+    "English": {},
+    "हिन्दी": {
+        "Overview": "मुख्य जानकारी", "UHBVN Consumer Help": "UHBVN उपभोक्ता सहायता",
+        "My Consumer Dashboard": "मेरा उपभोक्ता डैशबोर्ड", "India Monitoring": "भारत निगरानी",
+        "Theft Detection": "बिजली चोरी पहचान", "Data Centre": "डेटा केंद्र",
+        "News Intelligence": "समाचार और जानकारी", "Reports": "रिपोर्ट",
+        "Navigation": "नेविगेशन", "Energy Intelligence Platform": "ऊर्जा जानकारी प्लेटफ़ॉर्म",
+        "Data note: demo and public reference values are shown unless live utility integration is connected.": "डेटा सूचना: लाइव बिजली विभाग कनेक्शन उपलब्ध न होने पर डेमो और सार्वजनिक संदर्भ डेटा दिखाया जाता है।",
+        "My electricity connection": "मेरा बिजली कनेक्शन", "Add a bill to your records": "अपने रिकॉर्ड में बिल जोड़ें",
+        "My electricity history": "मेरे बिजली बिल का इतिहास", "Bill affordability and usage insights": "बिल और बिजली उपयोग का विश्लेषण",
+        "Your next-bill planning estimate": "अगले बिल का अनुमान", "Electricity-saving suggestions": "बिजली बचाने के सुझाव",
+        "How to understand your electricity bill": "अपना बिजली बिल कैसे समझें", "Check your meter units": "मीटर की यूनिट जाँचें",
+        "Trust Reading: what consumers should know": "ट्रस्ट रीडिंग: उपभोक्ताओं के लिए जानकारी",
+        "Common problems and what to do": "आम समस्याएँ और क्या करें",
+        "How to pay / fill in the online bill-payment form": "ऑनलाइन बिजली बिल का भुगतान कैसे करें",
+        "Prepare a complaint": "शिकायत तैयार करें", "UHBVN consumer contact": "UHBVN उपभोक्ता संपर्क",
+        "Consumer rights and escalation": "उपभोक्ता अधिकार और शिकायत आगे बढ़ाना",
+        "Tariff and public information": "बिजली दरें और सार्वजनिक जानकारी",
+        "Sign in": "लॉग इन करें", "Create account": "खाता बनाएँ", "Email address": "ईमेल पता",
+        "Create my account": "मेरा खाता बनाएँ", "Sign out": "लॉग आउट",
+        "Save connection details": "कनेक्शन की जानकारी सेव करें",
+        "Save bill to my dashboard": "बिल मेरे डैशबोर्ड में सेव करें",
+        "Download my bill history (CSV)": "मेरे बिल का इतिहास डाउनलोड करें (CSV)",
+        "Language / भाषा": "भाषा / Language",
+    },
+}
+def _t(label):
+    return UI_TEXT.get(st.session_state.get("app_language", "English"), {}).get(label, label)
+
+
 st.markdown(
     """
     <style>
@@ -203,7 +235,7 @@ def _authenticate_consumer(email, password):
 
 def _render_consumer_portal():
     _init_consumer_db()
-    st.title("My Consumer Dashboard")
+    st.title(_t("My Consumer Dashboard"))
     st.caption("A private, account-based space for the electricity information you choose to save.")
     st.warning(
         "Prototype storage notice: this version stores records in a local SQLite database on the app server. "
@@ -386,7 +418,7 @@ def _render_consumer_portal():
         "text/csv",
         use_container_width=True,
     )
-    st.subheader("Bill affordability and usage insights")
+    st.subheader(_t("Bill affordability and usage insights"))
     if avg_units > 0:
         st.write(f"Your recorded average usage is **{avg_units:,.1f} kWh per bill**. Your recorded average bill is **₹{avg_amount:,.2f}**.")
         if len(bills_df) >= 2:
@@ -401,7 +433,7 @@ def _render_consumer_portal():
                 st.info("Your latest and previous saved bills show the same recorded usage.")
         st.caption("Insights are calculated only from bills you entered. They are not utility meter telemetry or a tariff-based forecast.")
 
-    st.subheader("Your next-bill planning estimate")
+    st.subheader(_t("Your next-bill planning estimate"))
     if len(bills_df) >= 2 and avg_units > 0:
         recent = bills_df.head(min(3, len(bills_df)))
         forecast_units = float(recent["units_kwh"].mean())
@@ -467,8 +499,14 @@ news_items = E.get_news_feed()
 with st.sidebar:
     st.title("POWERGUARD GLOBAL")
     st.caption("Energy Intelligence Platform")
+    st.selectbox(
+        "Language / भाषा",
+        ["English", "हिन्दी"],
+        key="app_language",
+        help="Choose English or Hindi for navigation and translated section headings.",
+    )
     page = st.radio(
-        "Navigation",
+        _t("Navigation"),
         [
             "Overview",
             "UHBVN Consumer Help",
@@ -479,9 +517,10 @@ with st.sidebar:
             "News Intelligence",
             "Reports",
         ],
+        format_func=_t,
     )
     st.divider()
-    st.caption("Data note: demo and public reference values are shown unless live utility integration is connected.")
+    st.caption(_t("Data note: demo and public reference values are shown unless live utility integration is connected."))
 
 
 # Keep the personal portal independent of the global demo/CSV data selector.
@@ -604,7 +643,7 @@ if page == "Overview":
     st.dataframe(live, hide_index=True, use_container_width=True)
 
 elif page == "UHBVN Consumer Help":
-    st.title("UHBVN Consumer Information Centre")
+    st.title(_t("UHBVN Consumer Help"))
     st.caption("A plain-language guide to electricity bills, meter readings, payments and consumer services in Uttar Haryana.")
     st.info("PowerGuard is not connected to UHBVN's private billing system. It cannot retrieve personal bills, balances, payments or live readings. Use official UHBVN portals for account-specific services. Never enter OTPs, Aadhaar numbers or passwords here.")
 
@@ -629,7 +668,7 @@ elif page == "UHBVN Consumer Help":
                     st.markdown("[Open official UHBVN service](" + item[1] + ")")
 
     st.divider()
-    st.subheader("How to understand your electricity bill")
+    st.subheader(_t("How to understand your electricity bill"))
     terms = [
         ("Account / K. No.", "Your UHBVN consumer account identifier. Keep it private and use it only on official services."),
         ("Billing period", "The dates covered by this bill. Compare readings only for the same billing period."),
@@ -649,7 +688,7 @@ elif page == "UHBVN Consumer Help":
         with st.expander(title):
             st.write(detail)
 
-    st.subheader("Check your meter units")
+    st.subheader(_t("Check your meter units"))
     st.write("For a basic cumulative kWh register:")
     st.latex(r"\text{Units consumed} = (\text{Current reading} - \text{Previous reading}) \times \text{Meter multiplier}")
     c1, c2, c3 = st.columns(3)
@@ -665,12 +704,12 @@ elif page == "UHBVN Consumer Help":
         st.warning("Current reading is lower than previous. Check the register, dates, rollover or correction with UHBVN.")
     st.caption("This is an educational unit calculator, not an official bill calculator. It does not determine the payable amount.")
 
-    st.subheader("Trust Reading: what consumers should know")
+    st.subheader(_t("Trust Reading: what consumers should know"))
     st.write("UHBVN's Trust Reading portal describes eligibility for domestic, non-domestic and LT industrial consumers with load up to 20 kW and 10-digit account numbers. It requires OTP verification and a clear meter photograph. Confirm current eligibility and instructions on the official portal before submitting.")
     st.markdown("[Read UHBVN Trust Reading instructions] (https://trustbill.uhbvn.org.in/)")
     st.markdown("1. Match the meter number and consumer details on your bill.\n2. Note the correct kWh or kVAh register.\n3. Record the digits requested by the official form.\n4. Take a clear current photograph of the meter display.\n5. Submit only through UHBVN's official portal and keep the case ID/SMS.")
 
-    st.subheader("Common problems and what to do")
+    st.subheader(_t("Common problems and what to do"))
     problems = [
         ("Wrong or unusually high bill", "Compare dates, readings, units and multiplier; check payment receipts; then raise a billing complaint."),
         ("Bill not received", "Check the official bill portal and register a bill-not-received complaint if needed."),
@@ -682,7 +721,7 @@ elif page == "UHBVN Consumer Help":
         with st.expander(title):
             st.write(detail)
 
-    st.subheader("How to pay / fill in the online bill-payment form")
+    st.subheader(_t("How to pay / fill in the online bill-payment form"))
     st.markdown("""
     1. Open the official [UHBVN bill payment portal](https://epayment.uhbvn.org.in/b2cpaybill.aspx).
     2. Read the page instructions and enter the consumer/account identifier exactly as printed on your bill in the field requested by the official portal.
@@ -693,7 +732,7 @@ elif page == "UHBVN Consumer Help":
     """)
     st.warning("Never share your OTP, UPI PIN, card PIN, CVV or banking password with anyone or enter them into this prototype. Pay only on the official UHBVN portal.")
 
-    st.subheader("Prepare a complaint")
+    st.subheader(_t("Prepare a complaint"))
     st.write("Choose the issue below to create a draft you can review and submit through UHBVN's official complaint channel. This tool does not submit the complaint for you.")
     issue_type = st.selectbox(
         "Complaint category",
@@ -727,7 +766,7 @@ elif page == "UHBVN Consumer Help":
     st.markdown("[Open official UHBVN complaint portal](https://chs.uhbvn.org.in/)")
     st.caption("Enter full account details only on the official UHBVN portal, not in this prototype. Attach copies of bills or payment receipts only when the official complaint process requests them.")
 
-    st.subheader("UHBVN consumer contact")
+    st.subheader(_t("UHBVN consumer contact"))
     c1, c2, c3 = st.columns(3)
     c1.metric("Helpline", "1912")
     c2.metric("Toll-free", "1800 180 1550")
@@ -736,19 +775,19 @@ elif page == "UHBVN Consumer Help":
     st.caption("Published complaint codes include NS (No Supply), MD (Meter Defective), MB (Meter Burnt), WB (Wrong Bill) and BNR (Bill Not Received). Check the current format on UHBVN's complaint portal.")
     st.markdown("[Open UHBVN complaint portal](https://chs.uhbvn.org.in/)")
 
-    st.subheader("Consumer rights and escalation")
+    st.subheader(_t("Consumer rights and escalation"))
     st.write("If a complaint is not resolved through the normal channel, consumers may approach the Consumer Grievances Redressal Forum (CGRF) and, where applicable, the Electricity Ombudsman. Service timelines depend on the complaint type and current regulations.")
     st.markdown("[UHBVN Right to Service timelines (PDF)](https://www.uhbvn.org.in/staticContent/documents/RTS/Services_Right_To_Act.pdf)")
     st.markdown("[HERC CGRF information](https://www.herc.org.in/OmbudsmanContent/266_1_CGRF.aspx)")
     st.markdown("[UHBVN complaint-handling procedure (PDF)](https://www.uhbvn.org.in/staticContent/documents/Complaint%20Handling%20procedure.pdf)")
 
-    st.subheader("Tariff and public information")
+    st.subheader(_t("Tariff and public information"))
     st.markdown("- [UHBVN official website](https://www.uhbvn.org.in/)\n- [HERC website](https://herc.gov.in/)\n- [HERC regulations and tariff orders](https://herc.org.in/Regulation/1.aspx)")
     st.info("Tariff slabs, fixed charges, rebates and surcharges change by consumer category and effective date. This page does not hard-code a universal per-unit rate. Check the latest applicable UHBVN/HERC tariff order and the category printed on your bill.")
     st.caption("Sources checked 2 November 2026: UHBVN bill-payment portal, Trust Reading portal, payment-history page, complaint portal, Right to Service document and HERC consumer-grievance information. Informational guide; not an official UHBVN service.")
 
 elif page == "India Monitoring":
-    st.title("India Electricity Monitoring")
+    st.title(_t("India Monitoring"))
     st.caption("Public reference model for UHBVN, DHBVN and compatible future utilities.")
     utility = st.selectbox("Utility / region", [u["name"] for u in india_summary["utilities"]])
     util = next(u for u in india_summary["utilities"] if u["name"] == utility)
@@ -780,7 +819,7 @@ elif page == "India Monitoring":
             st.progress(float(item["risk_score"]), text=f"Risk score: {item['risk_score']}%")
 
 elif page == "Theft Detection":
-    st.title("Theft Detection")
+    st.title(_t("Theft Detection"))
     st.caption("Candidate anomalies are reviewed as potential issues, not proof of theft.")
 
     c = st.columns(4)
@@ -825,7 +864,7 @@ elif page == "Theft Detection":
             )
 
 elif page == "Data Centre":
-    st.title("Global Data Centre")
+    st.title(_t("Data Centre"))
     st.caption("CSV and public reference datasets are validated before analysis. Live utility integration is labelled and isolated.")
 
     st.subheader("Data quality overview")
@@ -853,7 +892,7 @@ elif page == "Data Centre":
         st.success(f"Saved to {E.DB_PATH.name}.")
 
 elif page == "News Intelligence":
-    st.title("News and Intelligence Centre")
+    st.title(_t("News Intelligence"))
     st.caption("Verified sources and public utility updates only. No fabricated incidents are published.")
 
     for item in news_items:
@@ -869,7 +908,7 @@ elif page == "News Intelligence":
             )
 
 elif page == "Reports":
-    st.title("PowerGuard Reports")
+    st.title(_t("Reports"))
     st.caption("Download suspicious records and data summaries. These are investigations, not legal proof of theft.")
 
     sev_sel = st.multiselect("Include severities", ["High", "Medium", "Low"], default=["High", "Medium", "Low"])
