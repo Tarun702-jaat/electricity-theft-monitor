@@ -189,7 +189,10 @@ def _init_consumer_db():
             )
         """)
         # Safe schema upgrades for existing prototype databases.
-        user_columns = {row["name"] for row in conn.execute("PRAGMA table_info(consumer_users)").fetchall()}\n        if "email_verified" not in user_columns:\n            conn.execute("ALTER TABLE consumer_users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0")\n        bill_columns = {row["name"] for row in conn.execute("PRAGMA table_info(consumer_bills)").fetchall()}
+        user_columns = {row["name"] for row in conn.execute("PRAGMA table_info(consumer_users)").fetchall()}
+        if "email_verified" not in user_columns:
+            conn.execute("ALTER TABLE consumer_users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0")
+        bill_columns = {row["name"] for row in conn.execute("PRAGMA table_info(consumer_bills)").fetchall()}
         if "payment_status" not in bill_columns:
             conn.execute("ALTER TABLE consumer_bills ADD COLUMN payment_status TEXT NOT NULL DEFAULT 'Unmarked'")
         if "payment_date" not in bill_columns:
@@ -315,7 +318,7 @@ def _render_email_verification(user_id, email):
             elif attempts >= 5:
                 st.session_state.pop("consumer_email_otp_hash", None)
                 st.error("Too many attempts. Request a new code later.")
-            elif re.fullmatch(r"\\d{6}", entered.strip()) and hmac.compare_digest(candidate, expected):
+            elif re.fullmatch(r"\d{6}", entered.strip()) and hmac.compare_digest(candidate, expected):
                 with _consumer_db() as conn:
                     conn.execute("UPDATE consumer_users SET email_verified = 1 WHERE id = ?", (user_id,))
                 st.session_state.pop("consumer_email_otp_hash", None)
