@@ -21,17 +21,17 @@ streamlit run app.py
 ## Consumer dashboard — current status
 
 The current dashboard is a **prototype**, not a live UHBVN account connection:
-- It uses email/password prototype sign-in and stores passwords as salted PBKDF2-HMAC-SHA256 hashes.
+- It uses email/password prototype sign-in and stores passwords as salted PBKDF2-HMAC-SHA256 hashes. New accounts must complete email OTP verification before opening the dashboard.
 - Consumers can enter their own connection label and bill figures and upload a bill copy.
 - Consumers can mark bill records as paid, unpaid, disputed or unmarked, record a payment date, review totals and usage trends, and export their saved bill history as CSV.
 - The dashboard compares recent saved bills, provides a simple clearly labelled next-bill planning estimate, and gives general electricity-saving suggestions based on recorded usage changes.
 - The Consumer Help page includes a step-by-step bill-payment guide and a complaint-draft assistant that consumers can download and submit themselves through official UHBVN channels.
 - Usage insights are calculated only from consumer-entered records; they are not live meter readings, official balances or tariff forecasts.
-- It does not send OTPs, verify a UHBVN account, retrieve live bills/readings/payments, submit complaints or make payments.
+- It sends a 6-digit email OTP when SMTP is configured. The code expires after 5 minutes and is limited to 5 attempts. This verifies email ownership only; it does not verify a UHBVN consumer number or registered mobile.
 - It does not automatically OCR uploaded bills.
 - It must not be presented as an official UHBVN service or as displaying verified live account data.
 
-The UHBVN Consumer Help page provides public guidance and links to official services. Account-specific transactions should be completed through UHBVN's official portals until an approved API integration is implemented.
+The UHBVN Consumer Help page provides public guidance and links to official services. The official service links are opened in a separate browser tab. Account-specific transactions should be completed through UHBVN's official portals until an approved API integration is implemented.
 
 ## UHBVN live API integration
 
@@ -52,3 +52,20 @@ Never commit API credentials, OTPs, private keys or real consumer records to thi
 ## Official UHBVN services
 
 The website's UHBVN Consumer Help page links to official UHBVN bill payment, Trust Reading, payment receipt and complaint services. Verify service availability and current terms on UHBVN's official website.
+
+
+### Configure email OTP (required for account verification)
+
+In Streamlit Community Cloud, open **App → Settings → Secrets** and add SMTP credentials from an email provider that permits SMTP access. Do not put credentials in source code or commit them to GitHub:
+
+```toml
+SMTP_HOST = "smtp.example.com"
+SMTP_PORT = "587"
+SMTP_USERNAME = "your-sender@example.com"
+SMTP_PASSWORD = "provider-app-password"
+SMTP_FROM = "POWERGUARD <your-sender@example.com>"
+```
+
+Use the provider's app password or SMTP credential, not your normal mailbox password. The owner must configure valid SMTP credentials before email OTP can be sent. Existing accounts will also need to verify their email the next time they sign in.
+
+**UHBVN verification is separate:** real consumer/account and registered-mobile verification requires UHBVN's authorised API or official KYC/OTP process. Do not label an email OTP as UHBVN verification.
