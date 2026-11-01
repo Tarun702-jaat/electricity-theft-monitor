@@ -668,7 +668,7 @@ elif page == "UHBVN Consumer Help":
     st.subheader("Trust Reading: what consumers should know")
     st.write("UHBVN's Trust Reading portal describes eligibility for domestic, non-domestic and LT industrial consumers with load up to 20 kW and 10-digit account numbers. It requires OTP verification and a clear meter photograph. Confirm current eligibility and instructions on the official portal before submitting.")
     st.markdown("[Read UHBVN Trust Reading instructions] (https://trustbill.uhbvn.org.in/)")
-    st.markdown("1. Match the meter number and consumer details on your bill.\\n2. Note the correct kWh or kVAh register.\\n3. Record the digits requested by the official form.\\n4. Take a clear current photograph of the meter display.\\n5. Submit only through UHBVN's official portal and keep the case ID/SMS.")
+    st.markdown("1. Match the meter number and consumer details on your bill.\n2. Note the correct kWh or kVAh register.\n3. Record the digits requested by the official form.\n4. Take a clear current photograph of the meter display.\n5. Submit only through UHBVN's official portal and keep the case ID/SMS.")
 
     st.subheader("Common problems and what to do")
     problems = [
@@ -714,12 +714,12 @@ elif page == "UHBVN Consumer Help":
         "Other": "I request assistance with the electricity service issue described below. Please register the complaint, investigate and provide an update.",
     }
     draft = (
-        f"Subject: {issue_type}\\n\\n"
-        f"Name: {complaint_name or '[Enter name on official form]'}\\n"
-        f"Area: {complaint_area or '[Enter locality on official form]'}\\n"
-        f"Consumer reference: {complaint_ref or '[Enter securely on official portal]'}\\n\\n"
-        f"{complaint_templates[issue_type]}\\n\\n"
-        f"Details: {complaint_details or '[Add dates, bill month, readings or transaction reference]'}\\n\\n"
+        f"Subject: {issue_type}\n\n"
+        f"Name: {complaint_name or '[Enter name on official form]'}\n"
+        f"Area: {complaint_area or '[Enter locality on official form]'}\n"
+        f"Consumer reference: {complaint_ref or '[Enter securely on official portal]'}\n\n"
+        f"{complaint_templates[issue_type]}\n\n"
+        f"Details: {complaint_details or '[Add dates, bill month, readings or transaction reference]'}\n\n"
         "Please provide a complaint / docket number for future follow-up."
     )
     st.text_area("Complaint draft — review and copy", value=draft, height=230)
@@ -732,7 +732,7 @@ elif page == "UHBVN Consumer Help":
     c1.metric("Helpline", "1912")
     c2.metric("Toll-free", "1800 180 1550")
     c3.metric("No-supply missed call", "9990231912")
-    st.markdown("- WhatsApp chatbot: **9815961912**\\n- Email: **1912@uhbvn.org.in**\\n- SMS complaint number: **9152331912**")
+    st.markdown("- WhatsApp chatbot: **9815961912**\n- Email: **1912@uhbvn.org.in**\n- SMS complaint number: **9152331912**")
     st.caption("Published complaint codes include NS (No Supply), MD (Meter Defective), MB (Meter Burnt), WB (Wrong Bill) and BNR (Bill Not Received). Check the current format on UHBVN's complaint portal.")
     st.markdown("[Open UHBVN complaint portal](https://chs.uhbvn.org.in/)")
 
@@ -743,7 +743,7 @@ elif page == "UHBVN Consumer Help":
     st.markdown("[UHBVN complaint-handling procedure (PDF)](https://www.uhbvn.org.in/staticContent/documents/Complaint%20Handling%20procedure.pdf)")
 
     st.subheader("Tariff and public information")
-    st.markdown("- [UHBVN official website](https://www.uhbvn.org.in/)\\n- [HERC website](https://herc.gov.in/)\\n- [HERC regulations and tariff orders](https://herc.org.in/Regulation/1.aspx)")
+    st.markdown("- [UHBVN official website](https://www.uhbvn.org.in/)\n- [HERC website](https://herc.gov.in/)\n- [HERC regulations and tariff orders](https://herc.org.in/Regulation/1.aspx)")
     st.info("Tariff slabs, fixed charges, rebates and surcharges change by consumer category and effective date. This page does not hard-code a universal per-unit rate. Check the latest applicable UHBVN/HERC tariff order and the category printed on your bill.")
     st.caption("Sources checked 2 November 2026: UHBVN bill-payment portal, Trust Reading portal, payment-history page, complaint portal, Right to Service document and HERC consumer-grievance information. Informational guide; not an official UHBVN service.")
 
