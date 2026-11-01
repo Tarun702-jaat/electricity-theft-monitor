@@ -1,4 +1,13 @@
 import pandas as pd
+import hashlib
+import hmac
+import os
+import re
+import secrets
+import sqlite3
+from contextlib import contextmanager
+from pathlib import Path
+from datetime import date
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
@@ -80,6 +89,303 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
+
+# Personal consumer portal storage. Set POWERGUARD_DATA_DIR to a persistent,
+# access-controlled directory in production; Streamlit Cloud local disk is ephemeral.
+def _consumer_db_path():
+    configured_dir = os.environ.get("POWERGUARD_DATA_DIR")
+    base = Path(configured_dir).expanduser() if configured_dir else Path(__file__).with_name("powerguard_data")
+    base.mkdir(parents=True, exist_ok=True)
+    return base / "consumer_portal.sqlite3"
+
+
+@contextmanager
+def _consumer_db():
+    conn = sqlite3.connect(_consumer_db_path(), timeout=20)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def _init_consumer_db():
+    with _consumer_db() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS consumer_users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                salt BLOB NOT NULL,
+                password_hash BLOB NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS consumer_profiles (
+                user_id INTEGER PRIMARY KEY,
+                full_name TEXT NOT NULL DEFAULT '',
+                utility TEXT NOT NULL DEFAULT 'UHBVN',
+                category TEXT NOT NULL DEFAULT 'Domestic',
+                connection_label TEXT NOT NULL DEFAULT '',
+                sanctioned_load TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES consumer_users(id) ON DELETE CASCADE
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS consumer_bills (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                bill_month TEXT NOT NULL,
+                units_kwh REAL NOT NULL,
+                amount REAL NOT NULL,
+                due_date TEXT NOT NULL DEFAULT '',
+                notes TEXT NOT NULL DEFAULT '',
+                file_name TEXT NOT NULL DEFAULT '',
+                file_bytes BLOB,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(user_id) REFERENCES consumer_users(id) ON DELETE CASCADE
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_consumer_bills_user ON consumer_bills(user_id, bill_month)")
+
+
+def _password_digest(password, salt):
+    return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 310000)
+
+
+def _create_consumer_account(email, password):
+    normalized = email.strip().lower()
+    if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", normalized):
+        return False, "Enter a valid email address."
+    if len(password) < 10:
+        return False, "Use a password with at least 10 characters."
+    salt = secrets.token_bytes(16)
+    digest = _password_digest(password, salt)
+    try:
+        with _consumer_db() as conn:
+            cur = conn.execute(
+                "INSERT INTO consumer_users(email, salt, password_hash) VALUES (?, ?, ?)",
+                (normalized, salt, digest),
+            )
+            user_id = cur.lastrowid
+            conn.execute("INSERT INTO consumer_profiles(user_id) VALUES (?)", (user_id,))
+        return True, (user_id, normalized)
+    except sqlite3.IntegrityError:
+        return False, "An account with this email already exists. Please sign in."
+
+
+def _authenticate_consumer(email, password):
+    with _consumer_db() as conn:
+        row = conn.execute(
+            "SELECT id, email, salt, password_hash FROM consumer_users WHERE email = ?",
+            (email.strip().lower(),),
+        ).fetchone()
+    if row is None:
+        return None
+    candidate = _password_digest(password, row["salt"])
+    if not hmac.compare_digest(candidate, row["password_hash"]):
+        return None
+    return (row["id"], row["email"])
+
+
+def _render_consumer_portal():
+    _init_consumer_db()
+    st.title("My Consumer Dashboard")
+    st.caption("A private, account-based space for the electricity information you choose to save.")
+    st.warning(
+        "Prototype storage notice: this version stores records in a local SQLite database on the app server. "
+        "Streamlit Cloud may reset local files, so do not upload real bills or sensitive personal information "
+        "until a persistent production database and deployment security review are configured."
+    )
+
+    if "consumer_user_id" not in st.session_state:
+        st.session_state.consumer_user_id = None
+        st.session_state.consumer_email = None
+
+    if st.session_state.consumer_user_id is None:
+        login_tab, register_tab = st.tabs(["Sign in", "Create account"])
+        with login_tab:
+            with st.form("consumer_login_form"):
+                login_email = st.text_input("Email address", key="consumer_login_email")
+                login_password = st.text_input("Password", type="password", key="consumer_login_password")
+                login_submit = st.form_submit_button("Sign in", use_container_width=True)
+            if login_submit:
+                account = _authenticate_consumer(login_email, login_password)
+                if account:
+                    st.session_state.consumer_user_id, st.session_state.consumer_email = account
+                    st.rerun()
+                else:
+                    st.error("Email or password is incorrect.")
+        with register_tab:
+            with st.form("consumer_register_form"):
+                new_email = st.text_input("Email address", key="consumer_register_email")
+                new_password = st.text_input("Create password (10+ characters)", type="password")
+                confirm_password = st.text_input("Confirm password", type="password")
+                register_submit = st.form_submit_button("Create my account", use_container_width=True)
+            if register_submit:
+                if new_password != confirm_password:
+                    st.error("The passwords do not match.")
+                else:
+                    ok, result = _create_consumer_account(new_email, new_password)
+                    if ok:
+                        st.session_state.consumer_user_id, st.session_state.consumer_email = result
+                        st.success("Account created.")
+                        st.rerun()
+                    else:
+                        st.error(result)
+        st.info("Each signed-in account can access only records linked to its own account in this app.")
+        st.caption("This prototype does not provide email verification or password reset. Do not reuse a password from another service.")
+        return
+
+    user_id = int(st.session_state.consumer_user_id)
+    st.write(f"Signed in as **{st.session_state.consumer_email}**")
+    if st.button("Sign out", key="consumer_sign_out"):
+        st.session_state.consumer_user_id = None
+        st.session_state.consumer_email = None
+        st.rerun()
+
+    with _consumer_db() as conn:
+        profile = conn.execute(
+            "SELECT * FROM consumer_profiles WHERE user_id = ?", (user_id,)
+        ).fetchone()
+    profile = dict(profile) if profile else {}
+
+    st.subheader("1. My electricity connection")
+    with st.form("consumer_profile_form"):
+        p1, p2 = st.columns(2)
+        with p1:
+            full_name = st.text_input("Name / profile label", value=profile.get("full_name", ""))
+            utility = st.selectbox(
+                "Electricity provider",
+                ["UHBVN", "DHBVN", "Other"],
+                index=["UHBVN", "DHBVN", "Other"].index(profile.get("utility", "UHBVN"))
+                if profile.get("utility", "UHBVN") in ["UHBVN", "DHBVN", "Other"] else 0,
+            )
+            category = st.selectbox(
+                "Connection category",
+                ["Domestic", "Non-domestic", "LT Industrial", "Agriculture", "Other"],
+                index=["Domestic", "Non-domestic", "LT Industrial", "Agriculture", "Other"].index(profile.get("category", "Domestic"))
+                if profile.get("category", "Domestic") in ["Domestic", "Non-domestic", "LT Industrial", "Agriculture", "Other"] else 0,
+            )
+        with p2:
+            connection_label = st.text_input(
+                "Connection nickname / last 4 digits only",
+                value=profile.get("connection_label", ""),
+                help="Do not enter your full account number, Aadhaar, phone number, OTP or password.",
+            )
+            sanctioned_load = st.text_input("Sanctioned load (optional)", value=profile.get("sanctioned_load", ""))
+        save_profile = st.form_submit_button("Save connection details")
+    if save_profile:
+        with _consumer_db() as conn:
+            conn.execute("""
+                INSERT INTO consumer_profiles(user_id, full_name, utility, category, connection_label, sanctioned_load, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    full_name=excluded.full_name, utility=excluded.utility,
+                    category=excluded.category, connection_label=excluded.connection_label,
+                    sanctioned_load=excluded.sanctioned_load, updated_at=CURRENT_TIMESTAMP
+            """, (user_id, full_name.strip()[:100], utility, category, connection_label.strip()[:40], sanctioned_load.strip()[:40]))
+        st.success("Your connection profile has been saved.")
+
+    st.divider()
+    st.subheader("2. Add a bill to your records")
+    st.caption("Enter the figures printed on your bill. You may attach a PDF or image for your own reference; this prototype does not automatically read/OCR the document.")
+    with st.form("consumer_bill_form"):
+        bill_month = st.date_input("Bill date / month", value=date.today())
+        b1, b2, b3 = st.columns(3)
+        with b1:
+            units = st.number_input("Units consumed (kWh)", min_value=0.0, value=0.0, step=1.0)
+        with b2:
+            amount = st.number_input("Bill amount (₹)", min_value=0.0, value=0.0, step=100.0)
+        with b3:
+            due_date = st.date_input("Payment due date", value=date.today(), key="consumer_bill_due")
+        notes = st.text_area("Notes (optional)", max_chars=500, placeholder="Example: monthly bill, estimated reading, payment note…")
+        bill_file = st.file_uploader("Attach bill copy (optional, PDF/JPG/PNG, max 5 MB)", type=["pdf", "jpg", "jpeg", "png"], key="consumer_bill_upload")
+        save_bill = st.form_submit_button("Save bill to my dashboard")
+    if save_bill:
+        if bill_file is not None and bill_file.size > 5 * 1024 * 1024:
+            st.error("The attachment exceeds the 5 MB limit.")
+        else:
+            payload = bill_file.getvalue() if bill_file is not None else None
+            filename = bill_file.name[:180] if bill_file is not None else ""
+            with _consumer_db() as conn:
+                conn.execute("""
+                    INSERT INTO consumer_bills(user_id, bill_month, units_kwh, amount, due_date, notes, file_name, file_bytes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    user_id, bill_month.isoformat(), float(units), float(amount),
+                    due_date.isoformat(), notes.strip(), filename, payload,
+                ))
+            st.success("Bill record saved to your account.")
+
+    st.divider()
+    st.subheader("3. My electricity history")
+    with _consumer_db() as conn:
+        bill_rows = conn.execute("""
+            SELECT id, bill_month, units_kwh, amount, due_date, notes, file_name
+            FROM consumer_bills WHERE user_id = ? ORDER BY bill_month DESC, id DESC
+        """, (user_id,)).fetchall()
+    if not bill_rows:
+        st.info("You have not saved any bill records yet. Add your first bill above.")
+        return
+
+    bills_df = pd.DataFrame([dict(row) for row in bill_rows])
+    total_units = float(bills_df["units_kwh"].sum())
+    total_amount = float(bills_df["amount"].sum())
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Saved bills", len(bills_df))
+    m2.metric("Total recorded units", f"{total_units:,.1f} kWh")
+    m3.metric("Total recorded bill amount", f"₹{total_amount:,.2f}")
+    chart_df = bills_df.copy()
+    chart_df["bill_month"] = pd.to_datetime(chart_df["bill_month"], errors="coerce")
+    chart_df = chart_df.dropna(subset=["bill_month"]).sort_values("bill_month")
+    if not chart_df.empty:
+        st.plotly_chart(
+            px.line(chart_df, x="bill_month", y="units_kwh", markers=True, title="My monthly electricity consumption (kWh)"),
+            use_container_width=True,
+        )
+        st.plotly_chart(
+            px.bar(chart_df, x="bill_month", y="amount", title="My saved bill amounts (₹)"),
+            use_container_width=True,
+        )
+    st.dataframe(
+        bills_df[["bill_month", "units_kwh", "amount", "due_date", "notes", "file_name"]],
+        hide_index=True, use_container_width=True,
+    )
+
+    attached = bills_df[bills_df["file_name"].astype(str).ne("")]
+    if not attached.empty:
+        st.subheader("My uploaded bill copies")
+        selected_id = st.selectbox(
+            "Choose an attachment",
+            attached["id"].tolist(),
+            format_func=lambda value: f"Bill #{value} — {attached.loc[attached['id'] == value, 'file_name'].iloc[0]}",
+        )
+        with _consumer_db() as conn:
+            file_row = conn.execute(
+                "SELECT file_name, file_bytes FROM consumer_bills WHERE id = ? AND user_id = ?",
+                (int(selected_id), user_id),
+            ).fetchone()
+        if file_row and file_row["file_bytes"] is not None:
+            suffix = Path(file_row["file_name"]).suffix.lower()
+            mime = "application/pdf" if suffix == ".pdf" else "image/png" if suffix == ".png" else "image/jpeg"
+            st.download_button(
+                "Download my bill copy",
+                data=file_row["file_bytes"],
+                file_name=file_row["file_name"],
+                mime=mime,
+                use_container_width=True,
+            )
+
+    st.caption("Your dashboard displays only information entered or uploaded by you. It is not a live UHBVN/DHBVN account connection, official bill, payment service or theft determination.")
+
 app_summary = E.get_global_overview()
 india_summary = E.get_india_monitoring()
 news_items = E.get_news_feed()
@@ -92,6 +398,7 @@ with st.sidebar:
         [
             "Overview",
             "UHBVN Consumer Help",
+            "My Consumer Dashboard",
             "India Monitoring",
             "Theft Detection",
             "Data Centre",
@@ -101,6 +408,12 @@ with st.sidebar:
     )
     st.divider()
     st.caption("Data note: demo and public reference values are shown unless live utility integration is connected.")
+
+
+# Keep the personal portal independent of the global demo/CSV data selector.
+if page == "My Consumer Dashboard":
+    _render_consumer_portal()
+    st.stop()
 
 # Shared utility / simulation input
 with st.sidebar:
