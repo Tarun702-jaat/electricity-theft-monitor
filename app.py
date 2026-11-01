@@ -5,6 +5,7 @@ import os
 import re
 import secrets
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 from datetime import date
 import plotly.express as px
@@ -99,11 +100,19 @@ def _consumer_db_path():
     return base / "consumer_portal.sqlite3"
 
 
+@contextmanager
 def _consumer_db():
     conn = sqlite3.connect(_consumer_db_path(), timeout=20)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def _init_consumer_db():
