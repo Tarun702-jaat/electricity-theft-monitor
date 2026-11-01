@@ -537,6 +537,8 @@ elif page == "UHBVN Consumer Help":
     st.subheader("Official consumer services")
     links = [
         ("Pay / view bill", "https://epayment.uhbvn.org.in/b2cpaybill.aspx", "View the bill amount and pay through UHBVN."),
+        ("Bill history", "https://epayment.uhbvn.org.in/b2cviewBillHistory.aspx", "Check previous bills using UHBVN's official consumer service."),
+        ("Update consumer KYC", "https://epayment.uhbvn.org.in/updateKYC.aspx", "Use UHBVN's official process to update eligible consumer details and verify the registered mobile."),
         ("Trust Reading", "https://trustbill.uhbvn.org.in/", "Submit a self-reading if the billed reading appears incorrect and your account is eligible."),
         ("Submit meter reading", "https://trustbill.uhbvn.org.in/trustbased.aspx", "Official form for KWH/KVAH reading, OTP and meter photograph."),
         ("Track Trust Reading", "https://trustbill.uhbvn.org.in/CheckStatus.aspx", "Track by account number or case ID."),
