@@ -1,11 +1,11 @@
 # UHBVN Consumer Portal — live integration checklist
 
-This repository currently provides a Streamlit consumer-information guide and a personal dashboard for records entered by the consumer. It does **not** yet retrieve private UHBVN records or send/verify OTPs.
+This repository currently provides a Streamlit consumer-information guide and a personal dashboard for records entered by the consumer. It can send and verify an email OTP when SMTP is configured. That verifies email ownership only. It does **not** retrieve private UHBVN records or send/verify UHBVN registered-mobile OTPs.
 
 ## What is already in the website
 
 - UHBVN Consumer Help: bill terminology, meter-unit calculator, complaint guidance, consumer contacts and official service links.
-- My Consumer Dashboard: account-based prototype sign-in, connection profile, manually saved bill rows, optional bill-file storage and usage/bill charts.
+- My Consumer Dashboard: account-based prototype sign-in, email OTP verification (SMTP required), connection profile, manually saved bill rows, optional bill-file storage and usage/bill charts. The dashboard explicitly labels UHBVN connection verification as not connected.
 - Existing POWERGUARD theft-monitoring, data upload, reports and monitoring pages remain separate.
 
 ## Required before live UHBVN data can be enabled
@@ -24,7 +24,7 @@ Ask the UHBVN API administrator for:
 
 ## Required application flow
 
-1. Consumer enters registered mobile number and the UHBVN account identifier.
+1. Consumer enters the UHBVN account identifier and registered mobile number only in the approved UHBVN flow. This prototype must not collect or retain those identifiers for verification.
 2. Server requests an OTP using the official endpoint. Never send OTP from browser JavaScript or log it.
 3. Consumer enters the OTP. Server verifies it with UHBVN.
 4. Server creates a short-lived authenticated session only after successful verification and account-ownership confirmation.
