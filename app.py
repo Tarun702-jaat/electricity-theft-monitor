@@ -389,6 +389,22 @@ def _render_consumer_portal():
         st.stop()
 
     st.write(f"Signed in as **{st.session_state.consumer_email}**")
+    with st.container(border=True):
+        st.subheader("Verification status")
+        st.success("Website email: verified")
+        st.warning("UHBVN electricity connection: not verified by this website")
+        st.write(
+            "Email verification confirms access to your email address only. "
+            "This app does not currently connect to UHBVN's private consumer database "
+            "and cannot confirm that an account number or mobile number belongs to you."
+        )
+        st.markdown(
+            "[Open the official UHBVN consumer KYC page](https://epayment.uhbvn.org.in/updateKYC.aspx)"
+        )
+        st.caption(
+            "Complete account/mobile verification only on the official UHBVN service. "
+            "Do not enter your OTP, PIN or full consumer details into this prototype."
+        )
     if st.button("Sign out", key="consumer_sign_out"):
         st.session_state.consumer_user_id = None
         st.session_state.consumer_email = None
