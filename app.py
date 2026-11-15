@@ -408,7 +408,7 @@ def _render_consumer_portal():
                     else:
                         st.error(result)
         st.info("Each signed-in account can access only records linked to its own account in this app.")
-        st.caption("Email verification is required after sign-in. The site owner must configure SMTP settings in Streamlit Secrets. Do not reuse a password from another service.")
+        st.caption("Email verification is required after sign-in. The site owner must configure RESEND_API_KEY in the hosting environment. Do not reuse a password from another service.")
         return
 
     user_id = int(st.session_state.consumer_user_id)
