@@ -1,5 +1,6 @@
 import pandas as pd
 import hashlib
+import json
 import hmac
 import os
 import re
@@ -8,6 +9,7 @@ import smtplib
 from email.message import EmailMessage
 import sqlite3
 import time
+import urllib.request
 from contextlib import contextmanager
 from pathlib import Path
 from datetime import date
@@ -250,14 +252,45 @@ def _mail_setting(name, default=""):
 
 
 def _send_consumer_email_otp(email, code):
-    """Send an email ownership code. Configure SMTP_* secrets in Streamlit."""
+    """Send an email ownership code through Resend (preferred) or configured SMTP."""
+    resend_api_key = _mail_setting("RESEND_API_KEY")
+    if resend_api_key:
+        sender = _mail_setting("RESEND_FROM", "POWERGUARD <onboarding@resend.dev>")
+        payload = {
+            "from": sender,
+            "to": [email],
+            "subject": "Your POWERGUARD verification code",
+            "text": (
+                f"Your POWERGUARD email verification code is {code}. "
+                "It expires in 5 minutes. Do not share this code with anyone. "
+                "This verifies your email address only; it does not verify a UHBVN electricity connection."
+            ),
+        }
+        request = urllib.request.Request(
+            "https://api.resend.com/emails",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {resend_api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                if 200 <= response.status < 300:
+                    return True, "Verification code sent to your email."
+                return False, "Could not send the email. Check the Resend configuration."
+        except Exception:
+            return False, "Could not send the email. Check the Resend API key and sender configuration."
+
+    # Backward-compatible SMTP fallback for deployments that still use SMTP.
     host = _mail_setting("SMTP_HOST")
     port = int(_mail_setting("SMTP_PORT", "587"))
     username = _mail_setting("SMTP_USERNAME")
     password = _mail_setting("SMTP_PASSWORD")
     sender = _mail_setting("SMTP_FROM", username)
     if not all([host, username, password, sender]):
-        return False, "Email verification is not configured yet. The site owner must add SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD and SMTP_FROM in Streamlit Secrets."
+        return False, "Email verification is not configured. Add RESEND_API_KEY in Render Environment."
     message = EmailMessage()
     message["Subject"] = "Your POWERGUARD verification code"
     message["From"] = sender
@@ -274,8 +307,7 @@ def _send_consumer_email_otp(email, code):
             server.send_message(message)
         return True, "Verification code sent to your email."
     except Exception:
-        return False, "Could not send the email. Check the SMTP settings in Streamlit Secrets."
-
+        return False, "Could not send the email. Check the SMTP settings."
 
 def _email_is_verified(user_id):
     with _consumer_db() as conn:
