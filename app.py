@@ -1021,7 +1021,8 @@ elif page == "India Monitoring":
             st.markdown(f"**Data source:** {item['source']}  ")
             st.markdown(f"**Connection status:** {item['connection']}  ")
             st.markdown(f"**Verified notes:** {item['notes']}  ")
-            st.progress(float(item["risk_score"]), text=f"Risk score: {item['risk_score']}%")
+            risk_percent = max(0.0, min(100.0, float(item["risk_score"])))
+            st.progress(risk_percent / 100.0, text=f"Risk score: {risk_percent:.0f}%")
 
 elif page == "Theft Detection":
     st.title(_t("Theft Detection"))
